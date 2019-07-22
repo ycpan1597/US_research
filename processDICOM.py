@@ -219,11 +219,11 @@ def linePoints(vx, vy, x0, y0, img):
 plt.close('all')
 
 if platform.system() == 'Darwin':
-    filePath = '/Users/preston/Desktop/US_research/US00001.dcm'
+    filePath = '/Users/preston/Desktop/US_research/US00001L.dcm'
 else:
-    filePath = 'D:\\US_rsearch\\US00001.dcm'
+    filePath = 'D:\\US_rsearch\\US00001L.dcm'
 
-ds = dicom.dcmread('/US001.dcm') # Need to wait for Oliver to send me some ultrasound dicom
+ds = dicom.dcmread(filePath) # Need to wait for Oliver to send me some ultrasound dicom
 # dir: /Users/preston/Desktop/Image_Processing/US001.dcm
 dims = (int(ds.Rows), int(ds.Columns))
 dsData = ds.PixelData
@@ -258,6 +258,9 @@ vx,vy,x,y = cv2.fitLine(c,cv2.DIST_L2, 0, 0.01, 0.01)   # the last two 0.01 are 
 twoPoints = linePoints(vx, vy, x, y, pureA)
 plt.figure()
 plt.imshow(cv2.line(pureA, twoPoints[0], twoPoints[1], (255, 0, 0)))
+
+if __name__ == "__main__":
+    print("Hello!")
 
 
 
