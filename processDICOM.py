@@ -221,7 +221,7 @@ plt.close('all')
 if platform.system() == 'Darwin':
     filePath = '/Users/preston/Desktop/US_research/US00001L.dcm'
 else:
-    filePath = 'D:\\US_rsearch\\US00001L.dcm'
+    filePath = 'D:\\US_research\\US00001L.dcm'
 
 ds = dicom.dcmread(filePath) # Need to wait for Oliver to send me some ultrasound dicom
 # dir: /Users/preston/Desktop/Image_Processing/US001.dcm
@@ -251,6 +251,7 @@ cv2.circle(withContours, (int(x), int(y)), int(radius), (0, 255, 255), 2)
                                                                  
 plt.figure()
 plt.imshow(A)
+plt.show()
 plt.figure()
 plt.imshow(withContours)
 
