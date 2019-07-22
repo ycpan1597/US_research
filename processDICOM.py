@@ -271,28 +271,28 @@ if __name__ == "__main__":
 #plt.figure()
 #plt.imshow(canvas)
         
-#%% Boarder detection
-cropped = cv2.cvtColor(frame[100:, :600], cv2.COLOR_RGB2GRAY)
-#cropped = frame[100:, :600, :]
-edges = cv2.Canny(cropped, 10, 50)
-plt.figure()
-plt.imshow(edges, 'gray')
-
-ret, mask = cv2.threshold(cropped, 50, 255, cv2.THRESH_BINARY)
-
-kernel = np.ones((6, 6), np.uint8)
-closed = cv2.morphologyEx(mask,cv2.MORPH_CLOSE,kernel,iterations = 2)
-
-newEdges = cv2.Canny(closed, 10, 50)
-
-contours, hierarchy = cv2.findContours(closed, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-withContours = cv2.drawContours(cropped, contours, -1, (255, 0, 0), 3)
-plt.figure()
-plt.imshow(withContours)
-
-plt.figure()
-plt.imshow(newEdges, 'gray')
-
+##%% Boarder detection
+#cropped = cv2.cvtColor(frame[100:, :600], cv2.COLOR_RGB2GRAY)
+##cropped = frame[100:, :600, :]
+#edges = cv2.Canny(cropped, 10, 50)
+#plt.figure()
+#plt.imshow(edges, 'gray')
+#
+#ret, mask = cv2.threshold(cropped, 50, 255, cv2.THRESH_BINARY)
+#
+#kernel = np.ones((6, 6), np.uint8)
+#closed = cv2.morphologyEx(mask,cv2.MORPH_CLOSE,kernel,iterations = 2)
+#
+#newEdges = cv2.Canny(closed, 10, 50)
+#
+#contours, hierarchy = cv2.findContours(closed, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+#withContours = cv2.drawContours(cropped, contours, -1, (255, 0, 0), 3)
+#plt.figure()
+#plt.imshow(withContours)
+#
+#plt.figure()
+#plt.imshow(newEdges, 'gray')
+#
 
 
 
