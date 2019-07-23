@@ -5,8 +5,6 @@ Created on Thu Jul  4 13:57:37 2019
 
 @author: preston
 """
-# Purpose: successfully read ultrasound scan in dicom with python's pydicom library
- 
 import pydicom as dicom
 import numpy as np
 import cv2
@@ -14,9 +12,10 @@ import matplotlib.pyplot as plt
 import time
 import platform
 
-def readFrame(frameNumber, data, dims = (600, 800), frames = 119, constBorder = 200, process = True):
+# Read a specific frame of the dicom file
+def readFrame(frameNumber, data, dims = (600, 800), maxFrameNum = 119, constBorder = 200, process = True):
     frame = np.zeros((dims[0], dims[1], 3), np.uint8)
-    if frameNumber > frames:
+    if frameNumber > maxFrameNum:
         raise Exception ('{} exceeded the maximum number of frames'.format(frameNumber))
     if frameNumber == 0:
         raise Exception ('Frames start from 1')
@@ -24,7 +23,6 @@ def readFrame(frameNumber, data, dims = (600, 800), frames = 119, constBorder = 
         # group 3 data entries into 1 pixel
         # each frame will take 600 * 800 * 3 = 1440000 data points)
         frameData = data[dims[0] * dims[1] * (frameNumber - 1) * 3 : dims[0] * dims[1] * frameNumber * 3]
-        
         frameData = [i for i in frameData]
     
         row = 0
@@ -37,13 +35,12 @@ def readFrame(frameNumber, data, dims = (600, 800), frames = 119, constBorder = 
             frame[row, col, :] = frameData[i : i + 3]
             col += 1
     frame = frame[300:, :600]                                                   # crop to see only the loop
-    frame = cv2.copyMakeBorder(frame, constBorder, constBorder, constBorder, constBorder, cv2.BORDER_CONSTANT)
+    frame = cv2.copyMakeBorder(frame, constBorder, constBorder, constBorder, constBorder, cv2.BORDER_CONSTANT) # expand the frame to accommodate additional transformation
     
     if process: 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)                         # convert to grayscale (1-channel)
-#        frame = cv2.GaussianBlur(frame, (3, 3), 1, 1)
         ret, mask = cv2.threshold(frame, 50, 255, cv2.THRESH_BINARY)            # apply a mask to increase image contrast
-        kernel = np.ones((5, 5), np.uint8)
+        kernel = np.ones((5, 5), np.uint8)                                      # kernal size can be further optimized
         closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE,kernel, iterations = 3) # closing - removes false negative
         return closed
     else: 
@@ -56,11 +53,11 @@ def translate(src, toRight, toBottom):
 
 def rotate(src, angle):
     rows, cols = src.shape[:2]
-    M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)                 # rotate about the center of the image
+    M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)                     # rotate about the center of the image
     rotated = cv2.warpAffine(src, M, (cols, rows))
     return rotated
 
-def transform(src, toRight, toBottom, angle):                               # includes translation and rotation
+def transform(src, toRight, toBottom, angle):                                   # includes translation and rotation
 	return rotate(translate(src, toRight, toBottom), angle)
 
 # Pixel-by-pixel comparison to determine similarity of two images
@@ -90,10 +87,10 @@ def pearsonCompare(imgA, imgB):
 
 # ref: reference image, src: source
 # This function shifts and rotates the source image within the give range of parameter
-# until it matches the reference image
-
-def shiftCompare(ref, src, horRange = [-5, 5], verRange = [-5, 5], rotRange = [-10, 0], seeAlignment = False):
+# until it matches the reference image. Supports dynamic range adjustment to ensure best solution
+def shiftRotateCompare(ref, src, horRange = [-5, 5], verRange = [-5, 5], rotRange = [-10, 0], seeAlignment = False):
     
+    # subfunction that checks if the horizontal/vertical/rotational shift ranges should be extended
     def checkValues(hor, ver, rot, hl, hh, vl, vh, rl, rh):
         result = np.empty([1, 3], dtype = int)
         result = result[0]
@@ -169,6 +166,7 @@ def shiftCompare(ref, src, horRange = [-5, 5], verRange = [-5, 5], rotRange = [-
             
     both = cv2.add(ref, best)
     
+    # option to view alignment
     if seeAlignment:
         plt.figure(figsize = (5, 11))
         plt.subplot(3, 1, 1)
@@ -186,39 +184,42 @@ def shiftCompare(ref, src, horRange = [-5, 5], verRange = [-5, 5], rotRange = [-
     
     return cv2.bitwise_xor(ref, best)
 
+# calculates the size of the enclosing circle based on the largest contour in multiple frames
 def checkContourArea(startFrameNum, endFrameNum, spacing, dsData):
     refFrames = np.arange(startFrameNum, endFrameNum, spacing)
-    radii = []
+    contourInfo = []
     for index, frame in enumerate(refFrames):
         A = readFrame(frame, dsData)
         cnts, hierarchy = cv2.findContours(A, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         if len(cnts) == 0:
             print('frame {} does not have any contours'.format(frame))
-            radii.append((refFrames[index], None))
+            contourInfo.append((refFrames[index], None))
         else :
             c = max(cnts, key = cv2.contourArea)
             ((x, y), radius) = cv2.minEnclosingCircle(c)
-            radii.append((refFrames[index], radius, (x, y)))
-    return radii
+            contourInfo.append((refFrames[index], radius, (x, y)))
+    return contourInfo
 
 # calculates two points that determine a line in an image given the vx/vy (unit vector) and x0/y0 (position)
 def linePoints(vx, vy, x0, y0, img):
     vx, vy, x0, y0 = vx[0], vy[0], x0[0], y0[0]
     dim = img.shape[:2]
-    if vx == 0:
+    if vx == 0: # vertical line with infinite slope
         left = (x0, 0)
         right = (x0, dim[0])
-    elif vy == 0:
+    elif vy == 0: # horizontal line with m = 0
         left = (0, y0)
         right = (dim[1], y0)
     else: 
         m = vy / vx
         y = lambda x : m * (x - x0) + y0
-        left = (-10, int(y(-10)))
+        left = (-10, int(y(-10))) # -10 guarantees that the line is drawn from one end of the image to another
         right = (max(dim), int(y(max(dim))))
     return left, right
 
-def shiftAndMatch(ref, src, horRange, verRange, rot):
+# modified version of shiftRotateCompare with a specified amount of rotation
+# does not support dynamic range adjustment
+def shiftCompare(ref, src, horRange, verRange, rot, visualize = False):
     start = time.time()
     horLow, horHigh = horRange[0], horRange[1]
     verLow, verHigh = verRange[0], verRange[1]
@@ -241,139 +242,96 @@ def shiftAndMatch(ref, src, horRange, verRange, rot):
     print('hor: {}, ver: {}'.format(horShift,verShift))
     print('correlation score: {} --> {}'.format(oldScore, maxCorr))
     result = cv2.add(ref, best)
-#    plt.figure()
-#    plt.imshow(result)
+    if visualize: 
+        plt.figure()
+        plt.imshow(result)
     return result
 
+if __name__ == '__main__':
+    plt.close('all')
+    
+    # run on windows ('Windows') or linux ('Darwin')
+    if platform.system() == 'Darwin':
+        filePath = '/Users/preston/Desktop/US_research/US00001L.dcm'
+    else:
+        filePath = 'D:\\US_research\\US00001L.dcm'
+    
+    ds = dicom.dcmread(filePath)
+    dims = (int(ds.Rows), int(ds.Columns))
+    dsData = ds.PixelData
+    bitsPerCell = ds.BitsAllocated
+    
+    canvas = readFrame(1, dsData) # use the first frame as the base
+    
+    frameA = 27 # the first time top is horizontal
+    frameB = 64 # the second time top is horizontal
+    frameC = 99 # the third time top is horizontal
+    
+    A, pureA = readFrame(frameA, dsData), readFrame(frameA, dsData, process = False) # pureA is a 3-channel(RGB) image that can be overlaid with the contour
+    B = readFrame(frameB, dsData)
+    C = readFrame(frameC, dsData)
+    
+    plt.figure(figsize = (8, 12))
+    plt.subplot(3, 2, 1)
+    plt.imshow(A)
+    plt.title('component 1 ({}th)'.format(frameA))
+    plt.subplot(3, 2, 2)
+    plt.imshow(A)
+    plt.title('rotated 0 degrees')
+    plt.subplot(3, 2, 3)
+    plt.imshow(B)
+    plt.title('component 2 ({}th)'.format(frameB))
+    plt.subplot(3, 2, 4)
+    plt.imshow(rotate(B, -60))
+    plt.title('rotated -60 degrees')
+    plt.subplot(3, 2, 5)
+    plt.imshow(C)
+    plt.title('component 3 ({}th)'.format(frameC))
+    plt.subplot(3, 2, 6)
+    plt.imshow(rotate(C, -120))
+    plt.title('rotated -120 degrees')
+    plt.subplots_adjust(hspace = 0.35)
+    
+    abMatch = shiftCompare(A, B, (97, 103), (-5, 0), -60)                       # solution: hor: 101, ver: -3
+    abcMatch = shiftCompare(abMatch, C, (160, 165), (48, 53), -120)             # solution: hor: 162, ver: 51
+    
+    plt.figure(figsize = (4, 12))
+    plt.subplot(3, 1, 1)
+    plt.imshow(A)
+    plt.title('component 1 (base)')
+    plt.subplot(3, 1, 2)
+    plt.imshow(abMatch)
+    plt.title('component 1 + 2')
+    plt.subplot(3, 1, 3)
+    plt.imshow(abcMatch)
+    plt.title('component 1 + 2 + 3')
+    plt.subplots_adjust(hspace = 0.35)
+    
+    cnts, hierarchy = cv2.findContours(abcMatch, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    c = max(cnts, key = cv2.contourArea)
+    withContours = cv2.drawContours(pureA, [c], 0, (255, 0, 0), 1)
+    ((x, y), radius) = cv2.minEnclosingCircle(c)
+    cv2.circle(withContours, (int(x), int(y)), int(radius), (0, 255, 255), 2)
+    plt.figure(figsize = (12, 12))
+    plt.imshow(withContours)
+    plt.title('diameter: %.2f' % (radius * 2))
 
-plt.close('all')
-
-if platform.system() == 'Darwin':
-    filePath = '/Users/preston/Desktop/US_research/US00001L.dcm'
-else:
-    filePath = 'D:\\US_research\\US00001L.dcm'
-
-ds = dicom.dcmread(filePath) # Need to wait for Oliver to send me some ultrasound dicom
-# dir: /Users/preston/Desktop/Image_Processing/US001.dcm
-dims = (int(ds.Rows), int(ds.Columns))
-dsData = ds.PixelData
-bitsPerCell = ds.BitsAllocated
-
-canvas = readFrame(1, dsData) # use the first frame as the base
-
-frameA = 27 # the first time top is horizontal
-frameB = 64 # the second time top is horizontal
-frameC = 99 # the third time top is horizontal
-A, pureA = readFrame(frameA, dsData), readFrame(frameA, dsData, process = False)
-B = readFrame(frameB, dsData)
-C = readFrame(frameC, dsData)
-
-plt.figure(figsize = (8, 12))
-plt.subplot(3, 2, 1)
-plt.imshow(A)
-plt.title('component 1 ({}th)'.format(frameA))
-plt.subplot(3, 2, 2)
-plt.imshow(A)
-plt.title('rotated 0 degrees')
-plt.subplot(3, 2, 3)
-plt.imshow(B)
-plt.title('component 2 ({}th)'.format(frameB))
-plt.subplot(3, 2, 4)
-plt.imshow(rotate(B, -60))
-plt.title('rotated -60 degrees')
-plt.subplot(3, 2, 5)
-plt.imshow(C)
-plt.title('component 3 ({}th)'.format(frameC))
-plt.subplot(3, 2, 6)
-plt.imshow(rotate(C, -120))
-plt.title('rotated -120 degrees')
-plt.subplots_adjust(hspace = 0.35)
-
-abMatch = shiftAndMatch(A, B, (97, 103), (-5, 0), -60)             # solution: hor: 101, ver: -3
-abcMatch = shiftAndMatch(abMatch, C, (160, 165), (48, 53), -120)     # solution: hor: 162, ver: 51
-
-plt.figure(figsize = (4, 12))
-plt.subplot(3, 1, 1)
-plt.imshow(A)
-plt.title('component 1 (base)')
-plt.subplot(3, 1, 2)
-plt.imshow(abMatch)
-plt.title('component 1 + 2')
-plt.subplot(3, 1, 3)
-plt.imshow(abcMatch)
-plt.title('component 1 + 2 + 3')
-
-cnts, hierarchy = cv2.findContours(abcMatch, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-c = max(cnts, key = cv2.contourArea)
-withContours = cv2.drawContours(pureA, [c], 0, (255, 0, 0), 1)
-((x, y), radius) = cv2.minEnclosingCircle(c)
-cv2.circle(withContours, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-plt.figure()
-plt.imshow(withContours)
-#plt.title('contour area = %.2f\n circle area = %.2f' % (cv2.contourArea(c), np.pi*radius**2))
-plt.title('diameter: %.2f' % (radius * 2))
-
-#comparison = shiftCompare(A, B)
-                                                                 
-#plt.figure()
-#plt.imshow(A)
-#plt.figure()
-#plt.imshow(B)
-#plt.title(str(frameA))
-#plt.figure()
-#plt.subplot(1, 2, 1)
-#plt.title('Unrotated, frame; {}'.format(frameB))
-#plt.imshow(B)
-#plt.subplot(1, 2, 2)
-#plt.title('Rotated')
-#plt.imshow(transform(B, 10, -3, -60))
-
-
-
-#%%
-cnts, hierarchy = cv2.findContours(A, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-withContours = cv2.drawContours(pureA, cnts, -1, (255, 0, 0), 1)
-c = max(cnts, key = cv2.contourArea)
-((x, y), radius) = cv2.minEnclosingCircle(c)
+#%% other experiments
 ## find centroid
 #M = cv2.moments(c)
 #centroid = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-cv2.circle(withContours, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-vx,vy,x,y = cv2.fitLine(c,cv2.DIST_L2, 0, 0.01, 0.01)   # the last two 0.01 are recommended accuracy values
-twoPoints = linePoints(vx, vy, x, y, pureA)
-plt.figure()
-plt.imshow(cv2.line(pureA, twoPoints[0], twoPoints[1], (255, 0, 0)))
 
-
-#for i in np.arange(1, 119, 10):
-#    prev = readFrame(i, dsData)
-#    comparison = shiftCompare(prev, readFrame(i + 1, dsData))
-#    canvas = cv2.add(canvas, comparison)
+## find and draw a line that fits through one contour
+#vx,vy,x,y = cv2.fitLine(c,cv2.DIST_L2, 0, 0.01, 0.01)   # the last two 0.01 are recommended accuracy values
+#twoPoints = linePoints(vx, vy, x, y, pureA)
 #plt.figure()
-#plt.imshow(canvas)
-        
-##%% Boarder detection
-#cropped = cv2.cvtColor(frame[100:, :600], cv2.COLOR_RGB2GRAY)
-##cropped = frame[100:, :600, :]
-#edges = cv2.Canny(cropped, 10, 50)
+#plt.imshow(cv2.line(pureA, twoPoints[0], twoPoints[1], (255, 0, 0)))
+
+
+## Boarder detection
+#edges = cv2.Canny(frameA, 10, 50)
 #plt.figure()
 #plt.imshow(edges, 'gray')
-#
-#ret, mask = cv2.threshold(cropped, 50, 255, cv2.THRESH_BINARY)
-#
-#kernel = np.ones((6, 6), np.uint8)
-#closed = cv2.morphologyEx(mask,cv2.MORPH_CLOSE,kernel,iterations = 2)
-#
-#newEdges = cv2.Canny(closed, 10, 50)
-#
-#contours, hierarchy = cv2.findContours(closed, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-#withContours = cv2.drawContours(cropped, contours, -1, (255, 0, 0), 3)
-#plt.figure()
-#plt.imshow(withContours)
-#
-#plt.figure()
-#plt.imshow(newEdges, 'gray')
-#
 
 
 
