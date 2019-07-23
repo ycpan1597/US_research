@@ -247,6 +247,9 @@ def shiftCompare(ref, src, horRange, verRange, rot, visualize = False):
         plt.imshow(result)
     return result
 
+#def findSimilarFrames(ref, allFrames):
+    
+
 if __name__ == '__main__':
     plt.close('all')
     
@@ -327,11 +330,31 @@ if __name__ == '__main__':
 #plt.figure()
 #plt.imshow(cv2.line(pureA, twoPoints[0], twoPoints[1], (255, 0, 0)))
 
-
-## Boarder detection
-#edges = cv2.Canny(frameA, 10, 50)
-#plt.figure()
-#plt.imshow(edges, 'gray')
+# Using houghlines to detect straight edges 
+plt.close('all')
+edges = cv2.Canny(C, 50, 150, apertureSize = 3)
+lines = cv2.HoughLines(edges, 1, np.pi/180, 50)
+withLines = edges.copy()
+for sublist in lines:
+    r = sublist[0][0]
+    theta = sublist[0][1]
+    a = np.cos(theta)
+    b = np.sin(theta)
+    
+    # found this section online; not sure why this works
+    x0 = a * r
+    y0 = b * r
+    x1 = int(x0 + 1000 * (-b))
+    y1 = int(y0 + 1000 * (a))
+    x2 = int(x0 - 1000 * (-b))
+    y2 = int(y0 - 1000 * (a))
+    
+    withLines = cv2.line(withLines, (x1, y1), (x2, y2), (255, 0, 0), 3)
+plt.figure()
+plt.subplot(2, 1, 1)
+plt.imshow(edges)
+plt.subplot(2, 1, 2)
+plt.imshow(withLines)
 
 
 
