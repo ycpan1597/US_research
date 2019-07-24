@@ -11,7 +11,7 @@ import cv2
 import matplotlib.pyplot as plt
 import time
 import platform
-
+#%%
 # Read a specific frame of the dicom file
 def readFrame(frameNumber, data, dims = (600, 800), maxFrameNum = 119, constBorder = 200, process = True):
     frame = np.zeros((dims[0], dims[1], 3), np.uint8)
@@ -40,9 +40,11 @@ def readFrame(frameNumber, data, dims = (600, 800), maxFrameNum = 119, constBord
     if process: 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)                         # convert to grayscale (1-channel)
         ret, mask = cv2.threshold(frame, 50, 255, cv2.THRESH_BINARY)            # apply a mask to increase image contrast
-        kernel = np.ones((5, 5), np.uint8)                                      # kernal size can be further optimized
-        closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE,kernel, iterations = 3) # closing - removes false negative
-        return closed
+        kernel = np.ones((5, 5), np.uint8)   
+        closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE,kernel, iterations = 3) # closing - removes false negative                                   # kernal size can be further optimized        
+        blurred = cv2.GaussianBlur(closed, (3, 3), 20, 20)
+        
+        return blurred
     else: 
         return frame
 
@@ -270,70 +272,69 @@ if __name__ == '__main__':
     frameB = 64 # the second time top is horizontal
     frameC = 99 # the third time top is horizontal
     
-    A, pureA = readFrame(frameA, dsData), readFrame(frameA, dsData, process = False) # pureA is a 3-channel(RGB) image that can be overlaid with the contour
-    B = readFrame(frameB, dsData)
-    C = readFrame(frameC, dsData)
+    A, rgbA = readFrame(frameA, dsData), readFrame(frameA, dsData, process = False) # rgbA is a 3-channel(RGB) image that can be overlaid with the contour
+    B, rgbB = readFrame(frameB, dsData), readFrame(frameB, dsData, process = False)
+    C, rgbC = readFrame(frameC, dsData), readFrame(frameC, dsData, process = False)
     
-    plt.figure(figsize = (8, 12))
-    plt.subplot(3, 2, 1)
-    plt.imshow(A)
-    plt.title('component 1 ({}th)'.format(frameA))
-    plt.subplot(3, 2, 2)
-    plt.imshow(A)
-    plt.title('rotated 0 degrees')
-    plt.subplot(3, 2, 3)
-    plt.imshow(B)
-    plt.title('component 2 ({}th)'.format(frameB))
-    plt.subplot(3, 2, 4)
-    plt.imshow(rotate(B, -60))
-    plt.title('rotated -60 degrees')
-    plt.subplot(3, 2, 5)
-    plt.imshow(C)
-    plt.title('component 3 ({}th)'.format(frameC))
-    plt.subplot(3, 2, 6)
-    plt.imshow(rotate(C, -120))
-    plt.title('rotated -120 degrees')
-    plt.subplots_adjust(hspace = 0.35)
-    
-    abMatch = shiftCompare(A, B, (97, 103), (-5, 0), -60)                       # solution: hor: 101, ver: -3
-    abcMatch = shiftCompare(abMatch, C, (160, 165), (48, 53), -120)             # solution: hor: 162, ver: 51
-    
-    plt.figure(figsize = (4, 12))
-    plt.subplot(3, 1, 1)
-    plt.imshow(A)
-    plt.title('component 1 (base)')
-    plt.subplot(3, 1, 2)
-    plt.imshow(abMatch)
-    plt.title('component 1 + 2')
-    plt.subplot(3, 1, 3)
-    plt.imshow(abcMatch)
-    plt.title('component 1 + 2 + 3')
-    plt.subplots_adjust(hspace = 0.35)
-    
-    cnts, hierarchy = cv2.findContours(abcMatch, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    c = max(cnts, key = cv2.contourArea)
-    withContours = cv2.drawContours(pureA, [c], 0, (255, 0, 0), 1)
-    ((x, y), radius) = cv2.minEnclosingCircle(c)
-    cv2.circle(withContours, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-    plt.figure(figsize = (12, 12))
-    plt.imshow(withContours)
-    plt.title('diameter: %.2f' % (radius * 2))
+#    plt.figure(figsize = (8, 12))
+#    plt.subplot(3, 2, 1)
+#    plt.imshow(A)
+#    plt.title('component 1 ({}th)'.format(frameA))
+#    plt.subplot(3, 2, 2)
+#    plt.imshow(A)
+#    plt.title('rotated 0 degrees')
+#    plt.subplot(3, 2, 3)
+#    plt.imshow(B)
+#    plt.title('component 2 ({}th)'.format(frameB))
+#    plt.subplot(3, 2, 4)
+#    plt.imshow(rotate(B, -60))
+#    plt.title('rotated -60 degrees')
+#    plt.subplot(3, 2, 5)
+#    plt.imshow(C)
+#    plt.title('component 3 ({}th)'.format(frameC))
+#    plt.subplot(3, 2, 6)
+#    plt.imshow(rotate(C, -120))
+#    plt.title('rotated -120 degrees')
+#    plt.subplots_adjust(hspace = 0.35)
+#    
+#    abMatch = shiftCompare(A, B, (97, 103), (-5, 0), -60)                       # solution: hor: 101, ver: -3
+#    abcMatch = shiftCompare(abMatch, C, (160, 165), (48, 53), -120)             # solution: hor: 162, ver: 51
+#    
+#    plt.figure(figsize = (4, 12))
+#    plt.subplot(3, 1, 1)
+#    plt.imshow(A)
+#    plt.title('component 1 (base)')
+#    plt.subplot(3, 1, 2)
+#    plt.imshow(abMatch)
+#    plt.title('component 1 + 2')
+#    plt.subplot(3, 1, 3)
+#    plt.imshow(abcMatch)
+#    plt.title('component 1 + 2 + 3')
+#    plt.subplots_adjust(hspace = 0.35)
+#    
+#    cnts, hierarchy = cv2.findContours(abcMatch, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+#    c = max(cnts, key = cv2.contourArea)
+#    withContours = cv2.drawContours(rgbA, [c], 0, (255, 0, 0), 1)
+#    ((x, y), radius) = cv2.minEnclosingCircle(c)
+#    cv2.circle(withContours, (int(x), int(y)), int(radius), (0, 255, 255), 2)
+#    plt.figure(figsize = (12, 12))
+#    plt.imshow(withContours)
+#    plt.title('diameter: %.2f' % (radius * 2))
 
-#%% other experiments
 ## find centroid
 #M = cv2.moments(c)
 #centroid = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
 ## find and draw a line that fits through one contour
 #vx,vy,x,y = cv2.fitLine(c,cv2.DIST_L2, 0, 0.01, 0.01)   # the last two 0.01 are recommended accuracy values
-#twoPoints = linePoints(vx, vy, x, y, pureA)
+#twoPoints = linePoints(vx, vy, x, y, rgbA)
 #plt.figure()
-#plt.imshow(cv2.line(pureA, twoPoints[0], twoPoints[1], (255, 0, 0)))
-
-# Using houghlines to detect straight edges 
+#plt.imshow(cv2.line(rgbA, twoPoints[0], twoPoints[1], (255, 0, 0)))
+#%%
+# Using cv2.HoughLines to detect straight edges
 plt.close('all')
-edges = cv2.Canny(C, 50, 150, apertureSize = 3)
-lines = cv2.HoughLines(edges, 1, np.pi/180, 50)
+edges = cv2.Canny(A, 50, 150, apertureSize = 3)
+lines = cv2.HoughLines(edges, 1, np.pi/180, 105)
 withLines = edges.copy()
 for sublist in lines:
     r = sublist[0][0]
@@ -344,17 +345,16 @@ for sublist in lines:
     # found this section online; not sure why this works
     x0 = a * r
     y0 = b * r
-    x1 = int(x0 + 1000 * (-b))
-    y1 = int(y0 + 1000 * (a))
-    x2 = int(x0 - 1000 * (-b))
-    y2 = int(y0 - 1000 * (a))
+    x1 = int(x0 + 2000 * (-b))
+    y1 = int(y0 + 2000 * (a))
+    x2 = int(x0 - 2000 * (-b))
+    y2 = int(y0 - 2000 * (a))
     
-    withLines = cv2.line(withLines, (x1, y1), (x2, y2), (255, 0, 0), 3)
+    rgbA = cv2.line(rgbA, (x1, y1), (x2, y2), (255, 0, 0), 3)
 plt.figure()
-plt.subplot(2, 1, 1)
 plt.imshow(edges)
-plt.subplot(2, 1, 2)
-plt.imshow(withLines)
+plt.figure()
+plt.imshow(rgbA)
 
 
 
