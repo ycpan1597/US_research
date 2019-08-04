@@ -87,11 +87,12 @@ def pearsonCompare(imgA, imgB):
     
     return corv / (stdA * stdB)
 
-# ref: reference image, src: source
+# ref: reference image frame number, src: source image frame number
 # This function shifts and rotates the source image within the give range of parameter
 # until it matches the reference image. Supports dynamic range adjustment to ensure best solution
 def shiftRotateCompare(ref, src, horRange = [-5, 5], verRange = [-5, 5], rotRange = [-10, 0], seeAlignment = False):
-    
+    ref = readFrame(ref, dsData)
+    src = readFrame(src, dsData)
     # subfunction that checks if the horizontal/vertical/rotational shift ranges should be extended
     def checkValues(hor, ver, rot, hl, hh, vl, vh, rl, rh):
         result = np.empty([1, 3], dtype = int)
@@ -138,7 +139,7 @@ def shiftRotateCompare(ref, src, horRange = [-5, 5], verRange = [-5, 5], rotRang
         for i in range(horLow, horHigh):
             for j in range(verLow, verHigh):
                 for k in range(rotLow, rotHigh):
-                    print('hor: {}, ver: {}, rot: {}'.format(i, j, k))
+                    # print('hor: {}, ver: {}, rot: {}'.format(i, j, k))
                     transformed = transform(src, i, j, k)
                     corr = pearsonCompare(ref, transformed)
                     if corr > maxCorr:
@@ -152,9 +153,9 @@ def shiftRotateCompare(ref, src, horRange = [-5, 5], verRange = [-5, 5], rotRang
         scores.append(maxCorr)
         if np.all(check == 0):
             done = True
-            print(horLow, horHigh, verLow, verHigh, rotLow, rotHigh)
+            # print(horLow, horHigh, verLow, verHigh, rotLow, rotHigh)
         else: 
-            print('At least 1 of the shifts reached its extrema: hor = {}, ver = {}, rot = {}'.format(horShift, verShift, rotShift))
+            # print('At least 1 of the shifts reached its extrema: hor = {}, ver = {}, rot = {}'.format(horShift, verShift, rotShift))
             horAdj, verAdj, rotAdj = np.multiply(check, np.array([horRange[1] - horRange[0], verRange[1] - verRange[0], rotRange[1] - rotRange[0]]))                      
             
             horLow += horAdj
@@ -184,7 +185,7 @@ def shiftRotateCompare(ref, src, horRange = [-5, 5], verRange = [-5, 5], rotRang
         
     print('%.2f s' % (time.time() - start))
     
-    return cv2.bitwise_xor(ref, best)
+    return cv2.bitwise_xor(ref, best), np.array([horShift, verShift, rotShift])
 
 # calculates the size of the enclosing circle based on the largest contour in multiple frames
 def checkContourArea(startFrameNum, endFrameNum, spacing, dsData):
@@ -249,12 +250,17 @@ def shiftCompare(ref, src, horRange, verRange, rot, visualize = False):
         plt.imshow(result)
     return result
 
-#def findSimilarFrames(ref, allFrames):
-    
+def findRotationForAll(imgList, ref = 2):
+    allRot = []
+    for index, src in enumerate(imgList):
+        _, shifts = shiftRotateCompare(ref, src)
+        allRot.append(shifts)
+        print('{}% done'.format((index + 1) * 100 / len(imgList)))
+    return allRot
 
 if __name__ == '__main__':
     plt.close('all')
-    
+    print('running main')
     # run on windows ('Windows') or linux ('Darwin')
     if platform.system() == 'Darwin':
         filePath = '/Users/preston/Desktop/US_research/US00001L.dcm'
@@ -275,7 +281,26 @@ if __name__ == '__main__':
     A, rgbA = readFrame(frameA, dsData), readFrame(frameA, dsData, process = False) # rgbA is a 3-channel(RGB) image that can be overlaid with the contour
     B, rgbB = readFrame(frameB, dsData), readFrame(frameB, dsData, process = False)
     C, rgbC = readFrame(frameC, dsData), readFrame(frameC, dsData, process = False)
-    
+
+    # print(findRotationForAll(range(2, 27), 2))
+
+    horShifts = []
+    verShifts = []
+    import csv
+    with open('shiftvalues.csv') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',')
+        for i, row in enumerate(reader):
+            if i > 0:
+                horShifts.append(int(row[1]))
+                verShifts.append(int(row[2]))
+
+    imageSet = []
+    for i, hor, ver in zip(range(2, 27), horShifts, verShifts):
+        imageSet.append(translate(readFrame(i, dsData), hor, ver))
+
+    ogImageSet = []
+    for i in range(2, 27):
+        ogImageSet.append(readFrame(i, dsData))
 #    plt.figure(figsize = (8, 12))
 #    plt.subplot(3, 2, 1)
 #    plt.imshow(A)
@@ -332,30 +357,27 @@ if __name__ == '__main__':
 #plt.imshow(cv2.line(rgbA, twoPoints[0], twoPoints[1], (255, 0, 0)))
 #%%
 # Using cv2.HoughLines to detect straight edges
-plt.close('all')
-edges = cv2.Canny(A, 50, 150, apertureSize = 3)
-lines = cv2.HoughLines(edges, 1, np.pi/180, 105)
-withLines = edges.copy()
-for sublist in lines:
-    r = sublist[0][0]
-    theta = sublist[0][1]
-    a = np.cos(theta)
-    b = np.sin(theta)
-    
-    # found this section online; not sure why this works
-    x0 = a * r
-    y0 = b * r
-    x1 = int(x0 + 2000 * (-b))
-    y1 = int(y0 + 2000 * (a))
-    x2 = int(x0 - 2000 * (-b))
-    y2 = int(y0 - 2000 * (a))
-    
-    rgbA = cv2.line(rgbA, (x1, y1), (x2, y2), (255, 0, 0), 3)
-plt.figure()
-plt.imshow(edges)
-plt.figure()
-plt.imshow(rgbA)
-
-
-
-        
+#     plt.close('all')
+#     edges = cv2.Canny(A, 50, 150, apertureSize = 3)
+#     lines = cv2.HoughLines(edges, 1, np.pi/180, 105)
+#     withLines = edges.copy()
+#     for sublist in lines:
+#         r = sublist[0][0]
+#         theta = sublist[0][1]
+#         a = np.cos(theta)
+#         b = np.sin(theta)
+#
+#         # found this section online; not sure why this works
+#         x0 = a * r
+#         y0 = b * r
+#         x1 = int(x0 + 2000 * (-b))
+#         y1 = int(y0 + 2000 * (a))
+#         x2 = int(x0 - 2000 * (-b))
+#         y2 = int(y0 - 2000 * (a))
+#
+#         rgbA = cv2.line(rgbA, (x1, y1), (x2, y2), (255, 0, 0), 3)
+#     plt.figure()
+#     plt.imshow(edges)
+#     plt.figure()
+#     plt.imshow(rgbA)
+#     plt.show()
