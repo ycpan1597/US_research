@@ -80,7 +80,9 @@ def pearsonCompare(imgA, imgB):
     meanA, meanB = np.mean(imgA), np.mean(imgB)
     stdA, stdB = np.std(imgA), np.std(imgB)
     corv = np.sum(np.multiply((imgA - meanA), (imgB - meanB)))
-    
+    # plt.figure()
+    # plt.imshow(cv2.bitwise_xor(imgA, imgB))
+
     return corv / (stdA * stdB)
 
 # ref: reference image frame number, src: source image frame number
@@ -284,7 +286,9 @@ def findRotationForAll(imgList, ref = 2):
 
 
 def findEnclosingCircle(img):
-    image, cnts, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # image, cnts, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cnts, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
     c = max(cnts, key=cv2.contourArea)
     ((x, y), radius) = cv2.minEnclosingCircle(c)
     return x, y, radius
@@ -338,8 +342,8 @@ if __name__ == '__main__':
     start = time.time()
     result = readFrame(20, dsData)
     for i in range(20, 30):
-        result = cv2.add(result, shiftRotateCompare(readFrame(i, dsData), readFrame(i + 1, dsData), horRange = [-50, 50], verRange = [-50, 50], rotRange = [-30, 0], dynamic = False))
-    print(time.time() - start + 's')
+        result = cv2.add(result, shiftRotateCompare(result, readFrame(i + 1, dsData), horRange = [-50, 50], verRange = [-50, 50], rotRange = [-30, -2], dynamic = False))
+    print('%.2f s' % (time.time() - start))
 
     # canvas = readFrame(1, dsData) # use the first frame as the base
     #
@@ -454,10 +458,10 @@ if __name__ == '__main__':
 #centroid = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
 ## find and draw a line that fits through one contour
-#vx,vy,x,y = cv2.fitLine(c,cv2.DIST_L2, 0, 0.01, 0.01)   # the last two 0.01 are recommended accuracy values
-#twoPoints = linePoints(vx, vy, x, y, rgbA)
-#plt.figure()
-#plt.imshow(cv2.line(rgbA, twoPoints[0], twoPoints[1], (255, 0, 0)))
+vx,vy,x,y = cv2.fitLine(c,cv2.DIST_L2, 0, 0.01, 0.01)   # the last two 0.01 are recommended accuracy values
+twoPoints = linePoints(vx, vy, x, y, rgbA)
+plt.figure()
+plt.imshow(cv2.line(rgbA, twoPoints[0], twoPoints[1], (255, 0, 0)))
 #%%
 # Using cv2.HoughLines to detect straight edges
 #     plt.close('all')
